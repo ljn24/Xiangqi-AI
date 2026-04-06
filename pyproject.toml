@@ -1,0 +1,6 @@
+[project]
+name = "xiangqi-ai"
+version = "0.1.0"
+description = "Course project: Chinese chess (Xiangqi) AI"
+requires-python = "~=3.11.0"
+dependencies = []
