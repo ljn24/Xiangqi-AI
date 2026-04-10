@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from .board import Board
+from .repetition import detect_repetition
 from .rules import generate_legal_moves, is_in_check
 from .types import Move, Side
 
+_UNSET: tuple[bool, Side | None] = (False, None)
+
 
 class GameState:
-    __slots__ = ("board", "current_side", "move_history", "position_history")
+    __slots__ = (
+        "board", "current_side", "move_history", "position_history",
+        "_rep_cache", "_rep_done",
+    )
 
     def __init__(
         self,
@@ -23,6 +29,14 @@ class GameState:
         self.position_history: list[int] = (
             position_history if position_history is not None else []
         )
+        self._rep_cache: tuple[bool, Side | None] = _UNSET
+        self._rep_done: bool = False
+
+    def _check_repetition(self) -> tuple[bool, Side | None]:
+        if not self._rep_done:
+            self._rep_cache = detect_repetition(self)
+            self._rep_done = True
+        return self._rep_cache
 
     @classmethod
     def initial(cls) -> GameState:
@@ -50,6 +64,9 @@ class GameState:
     def is_over(self) -> bool:
         if self.board.find_king(Side.RED) is None or self.board.find_king(Side.BLACK) is None:
             return True
+        rep_over, _ = self._check_repetition()
+        if rep_over:
+            return True
         return len(self.legal_moves()) == 0
 
     def winner(self) -> Side | None:
@@ -57,7 +74,9 @@ class GameState:
             return Side.BLACK
         if self.board.find_king(Side.BLACK) is None:
             return Side.RED
+        rep_over, violator = self._check_repetition()
+        if rep_over:
+            return violator.opposite if violator else None
         if len(self.legal_moves()) == 0:
-            # 无合法走子，当前方负
             return self.current_side.opposite
         return None
