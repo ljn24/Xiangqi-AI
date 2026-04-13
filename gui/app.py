@@ -51,10 +51,13 @@ C_STATUS_TEXT = (220, 210, 190)
 C_BTN = (160, 110, 60)
 C_BTN_HOVER = (200, 150, 90)
 C_BTN_TEXT = (255, 245, 230)
-C_ARROW = (180, 140, 80)
-C_ARROW_HOVER = (220, 180, 110)
-C_VALUE_TEXT = (255, 220, 120)
-C_HEADER_TEXT = (180, 160, 130)
+
+# 设置页（浅色背景）：深棕系，与 start/background 图色调一致
+C_SETUP_HEADER = (105, 76, 52)
+C_SETUP_LABEL = (78, 56, 40)
+C_SETUP_VALUE = (42, 30, 22)
+C_SETUP_ARROW = (140, 100, 68)
+C_SETUP_ARROW_HOVER = (165, 125, 88)
 
 # ── 评估函数 & Agent 类型元数据 ──────────────────────────
 
@@ -85,10 +88,14 @@ _ARROW_W, _ARROW_H = 44, 44
 
 
 class Screen(enum.Enum):
+    SPLASH = "splash"
     GAME_SETUP = "game_setup"
     PLAYING = "playing"
     GAME_OVER = "game_over"
 
+
+# start.png 上「开始游戏」整块按钮（含 START GAME 英文行）；y 按暗色区域扫描对齐，略扩边便于点击
+_SPLASH_BTN_NORM = (0.258, 0.752, 0.478, 0.134)
 
 AI_MOVE_EVENT = pygame.USEREVENT + 1
 
@@ -133,18 +140,33 @@ def _arrow_rects_at(y: int) -> tuple[pygame.Rect, pygame.Rect]:
 
 class Button:
     def __init__(
-        self, rect: pygame.Rect, text: str, font: pygame.font.Font
+        self,
+        rect: pygame.Rect,
+        text: str,
+        font: pygame.font.Font,
+        *,
+        fill: tuple[int, int, int] | None = None,
+        fill_hover: tuple[int, int, int] | None = None,
+        border: tuple[int, int, int] | None = None,
+        text_color: tuple[int, int, int] | None = None,
     ) -> None:
         self.rect = rect
         self.text = text
         self.font = font
+        self._fill = fill
+        self._fill_hover = fill_hover
+        self._border = border
+        self._text_color = text_color
 
     def draw(self, surface: pygame.Surface, mouse_pos: tuple[int, int]) -> None:
         hovered = self.rect.collidepoint(mouse_pos)
-        color = C_BTN_HOVER if hovered else C_BTN
+        base, hi = self._fill or C_BTN, self._fill_hover or C_BTN_HOVER
+        color = hi if hovered else base
         pygame.draw.rect(surface, color, self.rect, border_radius=8)
-        pygame.draw.rect(surface, C_LINE, self.rect, width=2, border_radius=8)
-        txt = self.font.render(self.text, True, C_BTN_TEXT)
+        brd = self._border or C_LINE
+        pygame.draw.rect(surface, brd, self.rect, width=2, border_radius=8)
+        tc = self._text_color or C_BTN_TEXT
+        txt = self.font.render(self.text, True, tc)
         surface.blit(txt, txt.get_rect(center=self.rect.center))
 
     def clicked(self, pos: tuple[int, int]) -> bool:
@@ -171,10 +193,19 @@ class XiangqiApp:
 
         self.piece_imgs = self._load_piece_images()
         self.board_img = self._load_board_image()
+        self._start_raw = self._load_start_image()
+        self._bg_setup_raw = self._load_setup_background_image()
+        self._start_scaled, self._splash_dest = self._scaled_contain(
+            self._start_raw, WINDOW_W, WINDOW_H
+        )
+        self._bg_setup_scaled, self._bg_setup_dest = self._scaled_contain(
+            self._bg_setup_raw, WINDOW_W, WINDOW_H
+        )
 
         self._opening_book = self._load_opening_book()
         self._init_setup_defaults()
         self._reset_to_setup()
+        self.screen = Screen.SPLASH
 
     # ── 资源加载 ──────────────────────────────────────────
 
@@ -196,6 +227,32 @@ class XiangqiApp:
         if not path.exists():
             raise FileNotFoundError(f"棋盘图片缺失: {path}")
         return pygame.image.load(str(path)).convert()
+
+    def _load_start_image(self) -> pygame.Surface:
+        path = ASSETS_DIR / "start.png"
+        if not path.exists():
+            raise FileNotFoundError(f"启动图缺失: {path}")
+        return pygame.image.load(str(path)).convert_alpha()
+
+    def _load_setup_background_image(self) -> pygame.Surface:
+        path = ASSETS_DIR / "background.png"
+        if not path.exists():
+            raise FileNotFoundError(f"设置页背景缺失: {path}")
+        return pygame.image.load(str(path)).convert_alpha()
+
+    @staticmethod
+    def _scaled_contain(
+        img: pygame.Surface, target_w: int, target_h: int
+    ) -> tuple[pygame.Surface, pygame.Rect]:
+        """等比缩放至完全落入 target 矩形，居中；返回 (缩放图, 在 target 中的摆放矩形)。"""
+        iw, ih = img.get_size()
+        scale = min(target_w / iw, target_h / ih)
+        nw = max(1, int(round(iw * scale)))
+        nh = max(1, int(round(ih * scale)))
+        scaled = pygame.transform.smoothscale(img, (nw, nh))
+        x = (target_w - nw) // 2
+        y = (target_h - nh) // 2
+        return scaled, pygame.Rect(x, y, nw, nh)
 
     @staticmethod
     def _load_opening_book() -> OpeningBook | None:
@@ -225,7 +282,6 @@ class XiangqiApp:
         self._cfg_use_book: bool = self._opening_book is not None
 
     def _reset_to_setup(self) -> None:
-        self.screen = Screen.GAME_SETUP
         self.state: GameState | None = None
         self.human_side: Side | None = None
         self.agents: dict[Side, Agent | None] = {
@@ -302,7 +358,7 @@ class XiangqiApp:
     def _setup_layout(self) -> tuple[list[dict], int]:
         """构建设置行列表和按钮 y 坐标。每行带 type/key/label/value/y。"""
         rows: list[dict] = []
-        y = 260
+        y = 200
 
         for side in (Side.RED, Side.BLACK):
             side_label = "红方" if side is Side.RED else "黑方"
@@ -370,6 +426,28 @@ class XiangqiApp:
 
     # ── 事件处理 ──────────────────────────────────────────
 
+    def _splash_button_window_rect(self) -> pygame.Rect:
+        """将 start.png 上的按钮归一化区域映射到窗口坐标。"""
+        iw, ih = self._start_raw.get_size()
+        nx, ny, nw, nh = _SPLASH_BTN_NORM
+        ix, iy = nx * iw, ny * ih
+        bw, bh = nw * iw, nh * ih
+        dest = self._splash_dest
+        k = dest.w / iw
+        return pygame.Rect(
+            int(dest.x + ix * k),
+            int(dest.y + iy * k),
+            max(1, int(bw * k)),
+            max(1, int(bh * k)),
+        )
+
+    def _splash_start_clicked(self, pos: tuple[int, int]) -> bool:
+        return self._splash_button_window_rect().collidepoint(pos)
+
+    def _handle_click_splash(self, pos: tuple[int, int]) -> None:
+        if self._splash_start_clicked(pos):
+            self.screen = Screen.GAME_SETUP
+
     def _handle_click_game_setup(self, pos: tuple[int, int]) -> None:
         rows, btn_y = self._setup_layout()
 
@@ -421,6 +499,7 @@ class XiangqiApp:
         btn = pygame.Rect(cx - 120, WINDOW_H // 2 + 50, 240, 52)
         if btn.collidepoint(pos):
             self._reset_to_setup()
+            self.screen = Screen.GAME_SETUP
 
     def _handle_ai_move(self, move: Move) -> None:
         if self.state is None:
@@ -483,10 +562,22 @@ class XiangqiApp:
         txt_surf = self.font.render(text, True, C_STATUS_TEXT)
         self.surface.blit(txt_surf, txt_surf.get_rect(center=bar.center))
 
+    def _draw_splash(self) -> None:
+        self.surface.fill(C_BG)
+        self.surface.blit(self._start_scaled, self._splash_dest.topleft)
+        mouse = pygame.mouse.get_pos()
+        btn_r = self._splash_button_window_rect()
+        if btn_r.collidepoint(mouse):
+            hi = pygame.Surface(btn_r.size, pygame.SRCALPHA)
+            hi.fill((255, 255, 255, 28))
+            self.surface.blit(hi, btn_r.topleft)
+
     def _draw_game_setup(self) -> None:
         self.surface.fill(C_BG)
-        title = self.font_lg.render("中国象棋 AI", True, C_STATUS_TEXT)
-        self.surface.blit(title, title.get_rect(center=(WINDOW_W // 2, 180)))
+        self.surface.blit(self._bg_setup_scaled, self._bg_setup_dest.topleft)
+
+        title = self.font_lg.render("对局设置", True, C_SETUP_VALUE)
+        self.surface.blit(title, title.get_rect(center=(WINDOW_W // 2, 120)))
 
         mouse = pygame.mouse.get_pos()
         rows, btn_y = self._setup_layout()
@@ -495,24 +586,25 @@ class XiangqiApp:
             y = row["y"]
 
             if row["type"] == "header":
-                hdr = self.font.render(row["label"], True, C_HEADER_TEXT)
+                hdr = self.font.render(row["label"], True, C_SETUP_HEADER)
                 self.surface.blit(hdr, hdr.get_rect(center=(WINDOW_W // 2, y + _HEADER_H // 2 - 5)))
                 continue
 
             # 标签
-            label_surf = self.font.render(row["label"], True, C_STATUS_TEXT)
+            label_surf = self.font.render(row["label"], True, C_SETUP_LABEL)
             self.surface.blit(label_surf, label_surf.get_rect(midright=(_SELECTOR_CX - 170, y)))
 
             # 当前值
-            val_surf = self.font.render(row["value"], True, C_VALUE_TEXT)
+            val_surf = self.font.render(row["value"], True, C_SETUP_VALUE)
             self.surface.blit(val_surf, val_surf.get_rect(center=(_SELECTOR_CX, y)))
 
             # 左右箭头
             left_r, right_r = _arrow_rects_at(y)
             for rect, direction in ((left_r, "left"), (right_r, "right")):
                 hovered = rect.collidepoint(mouse)
-                bg = C_ARROW_HOVER if hovered else C_ARROW
+                bg = C_SETUP_ARROW_HOVER if hovered else C_SETUP_ARROW
                 pygame.draw.rect(self.surface, bg, rect, border_radius=6)
+                pygame.draw.rect(self.surface, C_SETUP_VALUE, rect, width=1, border_radius=6)
                 tri_cx, tri_cy = rect.center
                 th, tw = 12, 10
                 if direction == "left":
@@ -522,9 +614,16 @@ class XiangqiApp:
                 pygame.draw.polygon(self.surface, C_BTN_TEXT, pts)
 
         btn_w, btn_h = 260, 52
-        Button(
-            pygame.Rect(WINDOW_W // 2 - btn_w // 2, btn_y, btn_w, btn_h), "开始对弈", self.font,
-        ).draw(self.surface, mouse)
+        setup_start_btn = Button(
+            pygame.Rect(WINDOW_W // 2 - btn_w // 2, btn_y, btn_w, btn_h),
+            "开始对弈",
+            self.font,
+            fill=C_SETUP_VALUE,
+            fill_hover=(62, 44, 30),
+            border=C_SETUP_HEADER,
+            text_color=C_BTN_TEXT,
+        )
+        setup_start_btn.draw(self.surface, mouse)
 
     def _draw_game_over_overlay(self) -> None:
         overlay = pygame.Surface((WINDOW_W, WINDOW_H), pygame.SRCALPHA)
@@ -557,7 +656,9 @@ class XiangqiApp:
                         self.screen = Screen.GAME_OVER
 
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if self.screen == Screen.GAME_SETUP:
+                    if self.screen == Screen.SPLASH:
+                        self._handle_click_splash(event.pos)
+                    elif self.screen == Screen.GAME_SETUP:
                         self._handle_click_game_setup(event.pos)
                     elif self.screen == Screen.PLAYING:
                         self._handle_click_playing(event.pos)
@@ -576,7 +677,9 @@ class XiangqiApp:
                 self._start_ai()
 
             self.surface.fill(C_BG)
-            if self.screen == Screen.GAME_SETUP:
+            if self.screen == Screen.SPLASH:
+                self._draw_splash()
+            elif self.screen == Screen.GAME_SETUP:
                 self._draw_game_setup()
             elif self.screen in (Screen.PLAYING, Screen.GAME_OVER):
                 self._draw_board()
