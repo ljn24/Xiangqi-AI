@@ -1,0 +1,17 @@
+experiment: D_book
+description: 双方均有开局库 vs 双方均无开局库（本配置为有开局库的一组）
+games: 20
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: minimax
+  depth: 4
+  evaluation: material_position
+  opening_book: data/opening_book.json
+
+black:
+  agent: minimax
+  depth: 4
+  evaluation: material_position
+  opening_book: data/opening_book.json

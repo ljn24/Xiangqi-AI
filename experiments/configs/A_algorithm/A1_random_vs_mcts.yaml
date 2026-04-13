@@ -1,0 +1,11 @@
+experiment: A_algorithm
+description: Random vs MCTS
+games: 20
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: random
+
+black:
+  agent: mcts

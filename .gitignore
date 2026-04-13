@@ -42,3 +42,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Experiment outputs
+experiments/results/

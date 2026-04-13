@@ -1,0 +1,13 @@
+experiment: B_depth
+description: MiniMax depth=2 vs MCTS baseline
+games: 20
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: minimax
+  depth: 2
+  evaluation: material_position
+
+black:
+  agent: mcts

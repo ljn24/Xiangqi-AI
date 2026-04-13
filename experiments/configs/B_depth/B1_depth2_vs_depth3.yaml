@@ -1,0 +1,15 @@
+experiment: B_depth
+description: MiniMax depth=2 vs depth=3
+games: 2
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: minimax
+  depth: 2
+  evaluation: material_position
+
+black:
+  agent: minimax
+  depth: 3
+  evaluation: material_position

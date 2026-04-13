@@ -1,0 +1,13 @@
+experiment: C_evaluation
+description: material (depth=4) vs MCTS baseline
+games: 20
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: minimax
+  depth: 4
+  evaluation: material
+
+black:
+  agent: mcts

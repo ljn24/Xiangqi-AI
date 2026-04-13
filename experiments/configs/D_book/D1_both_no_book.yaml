@@ -1,0 +1,15 @@
+experiment: D_book
+description: 双方均有开局库 vs 双方均无开局库（本配置为无开局库的对照组）
+games: 2
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: minimax
+  depth: 4
+  evaluation: material_position
+
+black:
+  agent: minimax
+  depth: 4
+  evaluation: material_position

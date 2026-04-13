@@ -1,0 +1,13 @@
+experiment: A_algorithm
+description: MCTS vs MiniMax (depth=4)
+games: 20
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: mcts
+
+black:
+  agent: minimax
+  depth: 4
+  evaluation: material_position

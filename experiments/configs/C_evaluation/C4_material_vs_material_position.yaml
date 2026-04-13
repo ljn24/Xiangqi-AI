@@ -1,0 +1,15 @@
+experiment: C_evaluation
+description: material vs material_position
+games: 2
+max_moves: 300
+swap_colors: true
+
+red:
+  agent: minimax
+  depth: 4
+  evaluation: material
+
+black:
+  agent: minimax
+  depth: 4
+  evaluation: material_position
